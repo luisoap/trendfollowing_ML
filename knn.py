@@ -1,21 +1,21 @@
 import pandas as pd
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import numpy as np
 import datetime
 from sklearn.neighbors import KNeighborsClassifier
-import datetime as dt
-from sklearn.model_selection import TimeSeriesSplit
+# import datetime as dt
+# from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import accuracy_score
-import talib as ta
+# import talib as ta
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import PolynomialFeatures
 from tqdm import tqdm 
 import data_crypto as dc
-from data_crypto.crypto import gen_data
+# from data_crypto.crypto import gen_data
 from port_construction import HRP, IVP, MinVar
-import pandas_datareader.data as pdr
-import datetime as dt
+# import pandas_datareader.data as pdr
+# import datetime as dt
 
 # Habilita rodar os diferentes métodos de construção de portfólios
 roda_HRP = 1
