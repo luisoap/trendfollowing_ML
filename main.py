@@ -70,13 +70,6 @@ for d, dm1 in zip(df_mercado.index[1:], df_mercado.index[:-1]):
 
 # Habilita rodar os diferentes métodos de construção de portfólios
 
-roda_HRP = 1
-roda_MVO = 1
-roda_IVP = 1
-roda_EW = 1
-
-###############
-
 # Lista de crypto currencies
 
 crypto_list = ['BTC-USD', 'LTC-USD', 'XRP-USD', 'ETH-USD', 'XMR-USD', 'DASH-USD', 'DCR-USD']
