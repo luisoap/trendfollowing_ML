@@ -1,4 +1,4 @@
-### MODEL COMBINATION 
+### MODEL COMBINATION
 
 import pandas_datareader.data as pdr
 import datetime as dt
@@ -7,13 +7,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import statsmodels.api as sm
 
-
-# Taxa livre de risco semanal, retorno semanal
+# Abaixo estamos fazendo o download dos dados de 13 weeks t-bill, baixando-os do site Yahoo Finance.
+# Taxa livre de risco semanal.
 
 end = dt.datetime.now().strftime("%Y-%m-%d")
-
 df_tbill = pdr.DataReader('^IRX', data_source='yahoo', start='2010-01-01', end=end)
-
 df_livre_risco = pd.DataFrame(index=df_tbill.index, columns=["IRX Anual", "IRX Semanal"])
 
 for i in df_tbill.index:
@@ -49,6 +47,9 @@ for d, dm1 in zip(df_mercado.index[1:], df_mercado.index[:-1]):
 
 
 # Executa os arquivos .py com os comandos necessários para rodar os diferentes modelos
+# Dentro de cada um desses arquivos que seram rodados com a função exec(), puxamos os dados das cryptocurrencies utilizando
+# a biblioteca 'data_crypto' criada por nós, todos os valores sendo em USD.
+
 exec(open("knn.py").read())
 exec(open("logistic.py").read())
 exec(open("SVC.py").read())
@@ -87,9 +88,7 @@ for d in signal_combination.index:
         if signal_svc[crypto].loc[d]==0:
             signal_combination[crypto].loc[d]=0
         else:
-            comb = signal_knn[crypto].loc[d]*(scores_final_knn[crypto].loc[d] / scores_final_knn[crypto].loc[d] + scores_final_logit[crypto].loc[d] + scores_final_svc[crypto].loc[d]) 
-            + signal_logit[crypto].loc[d]*(signal_logit[crypto].loc[d] / scores_final_knn[crypto].loc[d] + scores_final_logit[crypto].loc[d] + scores_final_svc[crypto].loc[d])
-            + signal_svc[crypto].loc[d]*(signal_svc[crypto].loc[d] / scores_final_knn[crypto].loc[d] + scores_final_logit[crypto].loc[d] + scores_final_svc[crypto].loc[d])
+            comb = signal_knn[crypto].loc[d]*(scores_final_knn[crypto].loc[d] / scores_final_knn[crypto].loc[d] + scores_final_logit[crypto].loc[d] + scores_final_svc[crypto].loc[d]) + signal_logit[crypto].loc[d]*(signal_logit[crypto].loc[d] / scores_final_knn[crypto].loc[d] + scores_final_logit[crypto].loc[d] + scores_final_svc[crypto].loc[d]) + signal_svc[crypto].loc[d]*(signal_svc[crypto].loc[d] / scores_final_knn[crypto].loc[d] + scores_final_logit[crypto].loc[d] + scores_final_svc[crypto].loc[d])
                                     
             signal_combination[crypto].loc[d]= make_signal(comb)
  
@@ -225,7 +224,7 @@ if roda_MVO==1:
     mvp_weights = pd.DataFrame(data = 0, index=signals_mvp.index, columns=signals_mvp.columns)
     
     for d in mvp_weights.index:        
-        if soma.loc[d]==1:
+        if soma.loc[d] == 1:
             mvp_weights['BTC-USD'].loc[d] = 1
             
         else:
@@ -442,6 +441,8 @@ for model in (backtests.columns):
 
     y = backtests[model].pct_change()
     y = y.dropna()
+    y = y.loc[x.index[0]:]
+
 
     regression = sm.OLS(y,x)
 
