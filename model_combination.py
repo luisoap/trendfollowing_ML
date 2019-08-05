@@ -7,6 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import statsmodels.api as sm
 
+
 # Taxa livre de risco semanal, retorno semanal
 
 end = dt.datetime.now().strftime("%Y-%m-%d")
