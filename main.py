@@ -96,12 +96,12 @@ for crypto in crypto_list:
 
 
 # cria função MACD
-def macd(_df):
-    ema_slow = _df['Adj Close'].ewm(span=26).mean()
-    ema_fast = _df['Adj Close'].ewm(span=12).mean()
-    _macd = ema_fast - ema_slow
+def macd(df):
+    EMA_slow = df['Adj Close'].ewm(span=26).mean()
+    EMA_fast = df['Adj Close'].ewm(span=12).mean()
+    macd = EMA_fast - EMA_slow
 
-    return _macd
+    return macd
 
 
 # Para cada cryptomoeda, vai gerar a matriz "X" de dados usados para gerar as previsões fora da amostra
@@ -116,10 +116,8 @@ for crypto_string in crypto_list:
     data['Adj Close'] = data['Adj Close']
     data['MACD'] = macd(data)
     # a biblioteca Talib pode dar erro se você não a instalou corretamente
-    # Para instalar em Windows,
-    # siga o tutorial: https://medium.com/@keng16302/how-to-install-ta-lib-in-python-on-window-9303eb003fbb
-    # Caso não consiga de jeito nenhum instalar a biblioteca Talib, uma última opção é "deletar" as duas linhas abaixo,
-    # o que deve reduzir bastante a acurácia do modelo
+    # Para instalar em Windows, siga o tutorial: https://medium.com/@keng16302/how-to-install-ta-lib-in-python-on-window-9303eb003fbb
+    # Caso não consiga de jeito nenhum instalar a biblioteca Talib, uma última opção é "deletar" as duas linhas abaixo, o que deve reduzir bastante a acurácia do modelo
     #     data['RSI'] = ta.RSI(np.array(data['Adj Close']))
     #     data['ADX'] = ta.ADX(np.array(data['High']), np.array(data['Low']),np.array(data['Adj Close']))
 
@@ -207,8 +205,6 @@ for crypto_string in crypto_list:
         y_train = y.loc[:x_val.index[0] + datetime.timedelta(-1)]
         y_test = y.loc[Xs.index[i]:Xs.index[i]]
 
-        best_parameter = 1
-
         if i in window_lengths:
 
             best_score = 0
@@ -218,19 +214,19 @@ for crypto_string in crypto_list:
             # hyperparametros
             for k in range(1, 13, 2):
                 knn = KNeighborsClassifier(n_neighbors=k)
-                knn.fit(x_train, np.ravel(y_train, order='C'))
-                score = knn.score(x_val, np.ravel(y_val, order='C'))
+                knn.fit(x_train, y_train)
+                score = knn.score(x_val, y_val)
 
                 if score > best_score:
                     best_score = score
                     best_parameter = k
 
+
             # Escolhido o melhor modelo, faça fit dos dados in-sample com a amostra de treino + validação
-            # Gere out-of-sample forecasting um passo à frente para gerar o sinal prevista para o portfólio da
-            # semana seguinte
+            # Gere out-of-sample forecasting um passo à frente para gerar o sinal prevista para o portfólio da semana seguinte
             scores_final_knn.set_value(x_test.index, crypto_string, best_score)
-            model = KNeighborsClassifier(n_neighbors=best_parameter, n_jobs=2)
-            model.fit(x_train_val, np.ravel(y_train_val, order='C'))
+            model = KNeighborsClassifier(n_neighbors = best_parameter, n_jobs=2)
+            model.fit(x_train_val, y_train_val)
             signal_knn.set_value(x_test.index, crypto_string, model.predict(x_test)[0])
             pred.append(model.predict(x_test)[0])
             true_values.append(y_test['Signals'][0])
@@ -238,15 +234,14 @@ for crypto_string in crypto_list:
 
         else:
             # Se não cair na semana de fazer o Tuning hyperparamenter, fite os dados normalmente e gere previsões
-            # Treinando o mesmo modelo usado anteriormente (melhor modelo escolhido algumas semanas atrás)  na amostra
-            # treino + validação
+            # Treinando o mesmo modelo usado anteriormente (melhor modelo escolhido algumas semanas atrás)  na amostra treino + validação
             # Gera forecasting um passo à frente fora da amostra
             model = KNeighborsClassifier(n_neighbors=best_parameter)
-            model.fit(x_train_val, np.ravel(y_train_val, order='C'))
+            model.fit(x_train_val, y_train_val)
             signal_knn.set_value(x_test.index, crypto_string, model.predict(x_test)[0])
             pred.append(model.predict(x_test)[0])
-            model.fit(x_train, np.ravel(y_train, order='C'))
-            scores_final_knn.set_value(x_test.index, crypto_string, model.score(x_val, np.ravel(y_val, order='C')))
+            model.fit(x_train, y_train)
+            scores_final_knn.set_value(x_test.index, crypto_string, model.score(x_val, y_val))
 
             true_values.append(y_test['Signals'][0])
             param.append(best_parameter)
@@ -329,8 +324,7 @@ strat_index_knn_ew = pd.DataFrame(data={'Return': (ew_weights * returns_ew).drop
 strat_index_knn_ew['Level'].iloc[0] = 100
 
 for d, dm1 in zip(strat_index_knn_ew.index[1:], strat_index_knn_ew.index[:-1]):
-    strat_index_knn_ew['Level'].loc[d] = strat_index_knn_ew['Level'].loc[dm1] *\
-                                         (1 + strat_index_knn_ew['Return'].loc[d])
+    strat_index_knn_ew['Level'].loc[d] = strat_index_knn_ew['Level'].loc[dm1] * (1 + strat_index_knn_ew['Return'].loc[d])
 
 strat_index_knn_ew['Level'].plot(figsize=(8, 5))
 
@@ -342,8 +336,7 @@ vol_y_knn_ew = strat_index_knn_ew['Level'].pct_change(1).rolling(52).aggregate(n
 SR_knn_ew = ret_y_knn_ew / vol_y_knn_ew
 # SR.plot()
 
-SR_mean_knn_ew = (strat_index_knn_ew['Level'].pct_change(1).mean() * 52) /\
-                 (strat_index_knn_ew['Level'].pct_change(1).std() * np.sqrt(52))
+SR_mean_knn_ew = (strat_index_knn_ew['Level'].pct_change(1).mean() * 52) / (strat_index_knn_ew['Level'].pct_change(1).std() * np.sqrt(52))
 
 print(SR_mean_knn_ew)
 
@@ -379,8 +372,7 @@ strat_index_knn_ivp = pd.DataFrame(data={'Return': (ivp_weights * returns_ivp).d
 strat_index_knn_ivp['Level'].iloc[0] = 100
 
 for d, dm1 in zip(strat_index_knn_ivp.index[1:], strat_index_knn_ivp.index[:-1]):
-    strat_index_knn_ivp['Level'].loc[d] = strat_index_knn_ivp['Level'].loc[dm1] *\
-                                          (1 + strat_index_knn_ivp['Return'].loc[d])
+    strat_index_knn_ivp['Level'].loc[d] = strat_index_knn_ivp['Level'].loc[dm1] * (1 + strat_index_knn_ivp['Return'].loc[d])
 
 strat_index_knn_ivp['Level'].plot(figsize=(8, 5))
 
@@ -390,8 +382,7 @@ vol_y_knn_ivp = strat_index_knn_ivp['Level'].pct_change(1).rolling(52).aggregate
 
 SR_knn_ivp = ret_y_knn_ivp / vol_y_knn_ivp
 
-SR_mean_knn_ivp = (strat_index_knn_ivp['Level'].pct_change(1).mean() * 52) /\
-                  (strat_index_knn_ivp['Level'].pct_change(1).std() * np.sqrt(52))
+SR_mean_knn_ivp = (strat_index_knn_ivp['Level'].pct_change(1).mean() * 52) / (strat_index_knn_ivp['Level'].pct_change(1).std() * np.sqrt(52))
 
 print(SR_mean_knn_ivp)
 
@@ -424,8 +415,7 @@ strat_index_knn_mvp = pd.DataFrame(data={'Return': (mvp_weights * return_mvp).dr
 strat_index_knn_mvp['Level'].iloc[0] = 100
 
 for d, dm1 in zip(strat_index_knn_mvp.index[1:], strat_index_knn_mvp.index[:-1]):
-    strat_index_knn_mvp['Level'].loc[d] = strat_index_knn_mvp['Level'].loc[dm1] *\
-                                          (1 + strat_index_knn_mvp['Return'].loc[d])
+    strat_index_knn_mvp['Level'].loc[d] = strat_index_knn_mvp['Level'].loc[dm1] * (1 + strat_index_knn_mvp['Return'].loc[d])
 
 strat_index_knn_mvp['Level'].plot(figsize=(8, 5))
 
@@ -435,15 +425,14 @@ vol_y_knn_mvp = strat_index_knn_mvp['Level'].pct_change(1).rolling(52).aggregate
 
 SR_knn_mvp = ret_y_knn_mvp / vol_y_knn_mvp
 
-SR_mean_knn_mvp = (strat_index_knn_mvp['Level'].pct_change(1).mean() * 52) /\
-                  (strat_index_knn_mvp['Level'].pct_change(1).std() * np.sqrt(52))
+SR_mean_knn_mvp = (strat_index_knn_mvp['Level'].pct_change(1).mean() * 52) / (strat_index_knn_mvp['Level'].pct_change(1).std() * np.sqrt(52))
 
 print(SR_mean_knn_mvp)
 
 #########################################
 
 ######################
-# PESOS por HYERARCHICAL CLUSTERING #######
+#### PESOS por HYERARCHICAL CLUSTERING #######
 
 signals_cluster = signal_knn.dropna(axis=0, how='all').fillna(0)
 return_cluster = returns_knn.dropna(axis=0, how='all').fillna(0)
@@ -465,14 +454,12 @@ for d in tqdm(hrp_weights.index[i:]):
     for tracker in tqdm(hrp_weights.columns):
         hrp_weights[tracker].loc[d] = w[tracker]
 
-strat_index_knn_cluster = pd.DataFrame(data={'Return': (hrp_weights * return_cluster).dropna().sum(axis=1),
-                                             'Level': np.nan})
+strat_index_knn_cluster = pd.DataFrame(data={'Return': (hrp_weights * return_cluster).dropna().sum(axis=1), 'Level': np.nan})
 
 strat_index_knn_cluster['Level'].iloc[0] = 100
 
 for d, dm1 in zip(strat_index_knn_cluster.index[1:], strat_index_knn_cluster.index[:-1]):
-    strat_index_knn_cluster['Level'].loc[d] = strat_index_knn_cluster['Level'].loc[dm1] *\
-                                              (1 + strat_index_knn_cluster['Return'].loc[d])
+    strat_index_knn_cluster['Level'].loc[d] = strat_index_knn_cluster['Level'].loc[dm1] * (1 + strat_index_knn_cluster['Return'].loc[d])
 
 strat_index_knn_cluster['Level'].plot(figsize=(8, 5))
 
@@ -482,8 +469,7 @@ vol_y_knn_cluster = strat_index_knn_cluster['Level'].pct_change(1).rolling(52).a
 
 SR_knn_cluster = ret_y_knn_cluster / vol_y_knn_cluster
 
-SR_mean_knn_cluster = (strat_index_knn_cluster['Level'].pct_change(1).mean() * 52) /\
-                      (strat_index_knn_cluster['Level'].pct_change(1).std() * np.sqrt(52))
+SR_mean_knn_cluster = (strat_index_knn_cluster['Level'].pct_change(1).mean() * 52) / (strat_index_knn_cluster['Level'].pct_change(1).std() * np.sqrt(52))
 
 print(SR_mean_knn_cluster)
 
@@ -521,12 +507,12 @@ for crypto in crypto_list:
 
 
 # cria função MACD
-def macd(df1):
-    ema_slow = df1['Adj Close'].ewm(span=26).mean()
-    ema_fast = df1['Adj Close'].ewm(span=12).mean()
-    macd1 = ema_fast - ema_slow
+def macd(df):
+    EMA_slow = df['Adj Close'].ewm(span=26).mean()
+    EMA_fast = df['Adj Close'].ewm(span=12).mean()
+    macd = EMA_fast - EMA_slow
 
-    return macd1
+    return macd
 
 
 # Para cada cryptomoeda, vai gerar a matriz "X" de dados usados para gerar as previsões fora da amostra
@@ -542,11 +528,9 @@ for crypto_string in crypto_list:
 
     data['MACD'] = macd(data)
     # a biblioteca Talib pode dar erro se você não a instalou corretamente
-    # Para instalar em Windows, siga o tutorial:
-    # https://medium.com/@keng16302/how-to-install-ta-lib-in-python-on-window-9303eb003fbb
+    # Para instalar em Windows, siga o tutorial: https://medium.com/@keng16302/how-to-install-ta-lib-in-python-on-window-9303eb003fbb
 
-    # Caso não consiga de jeito nenhum instalar a biblioteca Talib, uma última opção é "deletar" as duas linhas abaixo,
-    # o que deve reduzir bastante a acurácia do modelo
+    # Caso não consiga de jeito nenhum instalar a biblioteca Talib, uma última opção é "deletar" as duas linhas abaixo, o que deve reduzir bastante a acurácia do modelo
 
     # data['RSI'] = ta.RSI(np.array(data['Adj Close']))
     # data['ADX'] = ta.ADX(np.array(data['High']), np.array(data['Low']),np.array(data['Adj Close']))
@@ -571,15 +555,13 @@ for crypto_string in crypto_list:
     X = data.shift(1).dropna()
     y = signals[X.index[0]:]
 
-    # Vamos permitir iterações polinomiais de segunda ordem entre as variáveis explicativas dos sinais,
-    # para tornar o modelo menos linear
+    # Vamos permitir iterações polinomiais de segunda ordem entre as variáveis explicativas dos sinais, para tornar o modelo menos linear
     polynomial_interaction = PolynomialFeatures(degree=2, include_bias=False)
     X_poly = polynomial_interaction.fit_transform(X)
     X = pd.DataFrame(data=X_poly, index=X.index)
     # Gera Componentes Principais
     # Note que quando n_components =0.97, equivale a cuspir o número de componentes principais de tal forma que
-    # 97% da variância seja explicada. Portanto, o número de componentes será diferente para cada cryptomoeda,
-    # para cada modelo e para cada janela temporal...é variante no tempo!
+    # 97% da variância seja explicada. Portanto, o número de componentes será diferente para cada cryptomoeda, para cada modelo e para cada janela temporal...é variante no tempo!
 
     pca = PCA(n_components=0.97, whiten=True)
 
@@ -606,21 +588,16 @@ for crypto_string in crypto_list:
     pred = []
     true_values = []
 
-    # Aqui faço um "expanding sample": A cada novo período, expando um ponto a amostra de treino,
-    # desloco um ponto para frente a amostra de validação
-    # e um ponto a observação de teste (mantendo o tamnho da amostra de validação e teste constantes,
-    # apenas a amostra de treino que cresce com o tempo)
-    # Este método visa replicar a estratégia real que teria sido feita caso replicássemos no passado o procedimento,
-    # semana após semana, até os dias atuais
+    # Aqui faço um "expanding sample": A cada novo período, expando um ponto a amostra de treino, desloco um ponto para frente a amostra de validação
+    # e um ponto a observação de teste (mantendo o tamnho da amostra de validação e teste constantes, apenas a amostra de treino que cresce com o tempo)
+    # Este método visa replicar a estratégia real que teria sido feita caso replicássemos no passado o procedimento, semana após semana, até os dias atuais
     # Este tipo de abordagem é usual na literatura de forecasting e de validação de modelos out-of-sample
     # O procedimento segue o paper "Empirical Asset Pricing via Machine Learning (2019) "
-    # Equivale a fazer previsão fora da amostra 1 passo à frente, com validação mensal dos hyperparâmetros e treino
-    # semanal dos parâmetros
+    # Equivale a fazer previsão fora da amostra 1 passo à frente, com validação mensal dos hyperparâmetros e treino semanal dos parâmetros
 
     for i in range(train_val + 1, len(X)):
         Xs = X.loc[:X.index[i]]
-        # Padroniza as variáveis para terem média zero e variância 1, de tal forma que o PCA não seja guiado por
-        # variáveis cuja variância se sobrepõe às outras variáveis
+        # Padroniza as variáveis para terem média zero e variância 1, de tal forma que o PCA não seja guiado por variáveis cuja variância se sobrepõe às outras variáveis
         Xs = StandardScaler().fit_transform(Xs)
         # Aplica PCA para amostra disponível no período, ou seja, treino + validação
         Xs = pd.DataFrame(data=pca.fit_transform(Xs), index=X.index[:i + 1])
@@ -640,26 +617,24 @@ for crypto_string in crypto_list:
             # parameter tuning
             best_score = 0
             # A cada 4 semanas, faz o procedimento de "Tuning Hyperparameters "
-            # Seleciona na amostra de validação o modelo que gera melhor acurácia fora da amostra para diferentes
-            # hyperparametros
+            # Seleciona na amostra de validação o modelo que gera melhor acurácia fora da amostra para diferentes hyperparametros
 
             for c in [0.01, 0.1, 1, 10, 100]:
                 for l in ['l1', 'l2', 'none']:
                     logit = LogisticRegression(penalty=l, C=c, solver='saga')
-                    logit.fit(x_train, np.ravel(y_train, order='C'))
-                    score = logit.score(x_val, np.ravel(y_val, order='C'))
+                    logit.fit(x_train, y_train)
+                    score = logit.score(x_val, y_val)
 
                     if score > best_score:
                         best_score = score
                         best_parameters = {'C': c, 'Penalty': l}
 
             # Escolhido o melhor modelo, faça fit dos dados in-sample com a amostra de treino + validação
-            # Gere out-of-sample forecasting um passo à frente para gerar o sinal prevista para o portfólio da semana
-            # seguinte
+            # Gere out-of-sample forecasting um passo à frente para gerar o sinal prevista para o portfólio da semana seguinte
 
             scores_final_logit.set_value(x_test.index, crypto_string, best_score)
             model = LogisticRegression(penalty=best_parameters['Penalty'], C=best_parameters['C'], solver='saga')
-            model.fit(x_train_val, np.ravel(y_train_val, order='C'))
+            model.fit(x_train_val, y_train_val)
             signal_logit.set_value(x_test.index, crypto_string, model.predict(x_test)[0])
             pred.append(model.predict(x_test)[0])
             true_values.append(y_test['Signals'][0])
@@ -667,16 +642,15 @@ for crypto_string in crypto_list:
 
         else:
             # Se não cair na semana de fazer o Tuning hyperparamenter, fite os dados normalmente e gere previsões
-            # Treinando o mesmo modelo usado anteriormente (melhor modelo escolhido algumas semanas atrás)
-            # na amostra treino + validação
+            # Treinando o mesmo modelo usado anteriormente (melhor modelo escolhido algumas semanas atrás)  na amostra treino + validação
             # Gera forecasting um passo à frente fora da amostra
 
             model = LogisticRegression(C=best_parameters['C'], penalty=best_parameters['Penalty'], solver='saga')
-            model.fit(x_train_val, np.ravel(y_train_val, order='C'))
+            model.fit(x_train_val, y_train_val)
             pred.append(model.predict(x_test)[0])
             signal_logit.set_value(x_test.index, crypto_string, model.predict(x_test)[0])
-            model.fit(x_train, np.ravel(y_train, order='C'))
-            scores_final_logit.set_value(x_test.index, crypto_string, model.score(x_val, np.ravel(y_val, order='C')))
+            model.fit(x_train, y_train)
+            scores_final_logit.set_value(x_test.index, crypto_string, model.score(x_val, y_val))
             true_values.append(y_test['Signals'][0])
 
     accuracy = accuracy_score(true_values, pred)
@@ -733,7 +707,7 @@ return_final_logit.dropna(axis=0, how='all').plot()
 
 ######################
 
-# Roda Equally Weighted ####
+### Roda Equally Weighted ####
 
 
 signals_ew = signal_logit.dropna(axis=0, how='all').fillna(0)  # .dropna(axis=1,how='any')
@@ -757,8 +731,7 @@ strat_index_logit_ew = pd.DataFrame(data={'Return': (ew_weights * returns_ew).dr
 strat_index_logit_ew['Level'].iloc[0] = 100
 
 for d, dm1 in zip(strat_index_logit_ew.index[1:], strat_index_logit_ew.index[:-1]):
-    strat_index_logit_ew['Level'].loc[d] = strat_index_logit_ew['Level'].loc[dm1] *\
-                                           (1 + strat_index_logit_ew['Return'].loc[d])
+    strat_index_logit_ew['Level'].loc[d] = strat_index_logit_ew['Level'].loc[dm1] * (1 + strat_index_logit_ew['Return'].loc[d])
 
 strat_index_logit_ew['Level'].plot(figsize=(8, 5))
 
@@ -770,14 +743,13 @@ vol_y_logit_ew = strat_index_logit_ew['Level'].pct_change(1).rolling(52).aggrega
 SR_logit_ew = ret_y_logit_ew / vol_y_logit_ew
 # SR.plot()
 
-SR_mean_logit_ew = (strat_index_logit_ew['Level'].pct_change(1).mean() * 52) /\
-                   (strat_index_logit_ew['Level'].pct_change(1).std() * np.sqrt(52))
+SR_mean_logit_ew = (strat_index_logit_ew['Level'].pct_change(1).mean() * 52) / (strat_index_logit_ew['Level'].pct_change(1).std() * np.sqrt(52))
 
 print(SR_mean_logit_ew)
 
 ######################################
 
-# Roda IVP ###
+## Roda IVP ###
 
 signals_ivp = signal_logit.dropna(axis=0, how='all').fillna(0)  # .dropna(axis=1,how='any')
 ivp_weights = pd.DataFrame(data=0, index=signals_ivp.index, columns=signals_ivp.columns)
@@ -807,8 +779,7 @@ strat_index_logit_ivp = pd.DataFrame(data={'Return': (ivp_weights * returns_ivp)
 strat_index_logit_ivp['Level'].iloc[0] = 100
 
 for d, dm1 in zip(strat_index_logit_ivp.index[1:], strat_index_logit_ivp.index[:-1]):
-    strat_index_logit_ivp['Level'].loc[d] = strat_index_logit_ivp['Level'].loc[dm1] *\
-                                            (1 + strat_index_logit_ivp['Return'].loc[d])
+    strat_index_logit_ivp['Level'].loc[d] = strat_index_logit_ivp['Level'].loc[dm1] * (1 + strat_index_logit_ivp['Return'].loc[d])
 
 strat_index_logit_ivp['Level'].plot(figsize=(8, 5))
 
@@ -818,14 +789,13 @@ vol_y_logit_ivp = strat_index_logit_ivp['Level'].pct_change(1).rolling(52).aggre
 
 SR_logit_ivp = ret_y_logit_ivp / vol_y_logit_ivp
 
-SR_mean_logit_ivp = (strat_index_logit_ivp['Level'].pct_change(1).mean() * 52) /\
-                    (strat_index_logit_ivp['Level'].pct_change(1).std() * np.sqrt(52))
+SR_mean_logit_ivp = (strat_index_logit_ivp['Level'].pct_change(1).mean() * 52) / (strat_index_logit_ivp['Level'].pct_change(1).std() * np.sqrt(52))
 
 print(SR_mean_logit_ivp)
 
 ######################################
 
-# RODA MVO ###
+#### RODA MVO ###
 
 signals_mvp = signal_logit.dropna(axis=0, how='all').fillna(0)
 return_mvp = returns_logit.dropna(axis=0, how='all').fillna(0)
@@ -852,8 +822,7 @@ strat_index_logit_mvp = pd.DataFrame(data={'Return': (mvp_weights * return_mvp).
 strat_index_logit_mvp['Level'].iloc[0] = 100
 
 for d, dm1 in zip(strat_index_logit_mvp.index[1:], strat_index_logit_mvp.index[:-1]):
-    strat_index_logit_mvp['Level'].loc[d] = strat_index_logit_mvp['Level'].loc[dm1] *\
-                                            (1 + strat_index_logit_mvp['Return'].loc[d])
+    strat_index_logit_mvp['Level'].loc[d] = strat_index_logit_mvp['Level'].loc[dm1] * (1 + strat_index_logit_mvp['Return'].loc[d])
 
 strat_index_logit_mvp['Level'].plot(figsize=(8, 5))
 
@@ -863,15 +832,14 @@ vol_y_logit_mvp = strat_index_logit_mvp['Level'].pct_change(1).rolling(52).aggre
 
 SR_logit_mvp = ret_y_logit_mvp / vol_y_logit_mvp
 
-SR_mean_logit_mvp = (strat_index_logit_mvp['Level'].pct_change(1).mean() * 52) /\
-                    (strat_index_logit_mvp['Level'].pct_change(1).std() * np.sqrt(52))
+SR_mean_logit_mvp = (strat_index_logit_mvp['Level'].pct_change(1).mean() * 52) / (strat_index_logit_mvp['Level'].pct_change(1).std() * np.sqrt(52))
 
 print(SR_mean_logit_mvp)
 
 #########################################
 
 ######################
-# PESOS por HYERARCHICAL CLUSTERING #######
+#### PESOS por HYERARCHICAL CLUSTERING #######
 
 signals_cluster = signal_logit.dropna(axis=0, how='all').fillna(0)
 return_cluster = returns_logit.dropna(axis=0, how='all').fillna(0)
@@ -893,14 +861,12 @@ for d in tqdm(hrp_weights.index[i:]):
     for tracker in tqdm(hrp_weights.columns):
         hrp_weights[tracker].loc[d] = w[tracker]
 
-strat_index_logit_cluster = \
-    pd.DataFrame(data={'Return': (hrp_weights * return_cluster).dropna().sum(axis=1), 'Level': np.nan})
+strat_index_logit_cluster = pd.DataFrame(data={'Return': (hrp_weights * return_cluster).dropna().sum(axis=1), 'Level': np.nan})
 
 strat_index_logit_cluster['Level'].iloc[0] = 100
 
 for d, dm1 in zip(strat_index_logit_cluster.index[1:], strat_index_logit_cluster.index[:-1]):
-    strat_index_logit_cluster['Level'].loc[d] = strat_index_logit_cluster['Level'].loc[dm1] *\
-                                                (1 + strat_index_logit_cluster['Return'].loc[d])
+    strat_index_logit_cluster['Level'].loc[d] = strat_index_logit_cluster['Level'].loc[dm1] * (1 + strat_index_logit_cluster['Return'].loc[d])
 
 strat_index_logit_cluster['Level'].plot(figsize=(8, 5))
 
@@ -910,8 +876,7 @@ vol_y_logit_cluster = strat_index_logit_cluster['Level'].pct_change(1).rolling(5
 
 SR_logit_cluster = ret_y_logit_cluster / vol_y_logit_cluster
 
-SR_mean_logit_cluster = (strat_index_logit_cluster['Level'].pct_change(1).mean() * 52) /\
-                        (strat_index_logit_cluster['Level'].pct_change(1).std() * np.sqrt(52))
+SR_mean_logit_cluster = (strat_index_logit_cluster['Level'].pct_change(1).mean() * 52) / (strat_index_logit_cluster['Level'].pct_change(1).std() * np.sqrt(52))
 
 print(SR_mean_logit_cluster)
 
@@ -920,6 +885,9 @@ print(SR_mean_logit_cluster)
 # SVC model
 
 ########################################################################################################################
+
+
+
 
 # Lista de crypto currencies
 
@@ -947,12 +915,12 @@ for crypto in crypto_list:
 
 
 # cria função MACD
-def macd(df1):
-    ema_slow = df1['Adj Close'].ewm(span=26).mean()
-    ema_fast = df1['Adj Close'].ewm(span=12).mean()
-    macd1 = ema_fast - ema_slow
+def macd(df):
+    EMA_slow = df['Adj Close'].ewm(span=26).mean()
+    EMA_fast = df['Adj Close'].ewm(span=12).mean()
+    macd = EMA_fast - EMA_slow
 
-    return macd1
+    return macd
 
 
 # Para cada cryptomoeda, vai gerar a matriz "X" de dados usados para gerar as previsões fora da amostra
@@ -968,11 +936,9 @@ for crypto_string in crypto_list:
 
     data['MACD'] = macd(data)
     # a biblioteca Talib pode dar erro se você não a instalou corretamente
-    # Para instalar em Windows, siga o tutorial:
-    # https://medium.com/@keng16302/how-to-install-ta-lib-in-python-on-window-9303eb003fbb
+    # Para instalar em Windows, siga o tutorial: https://medium.com/@keng16302/how-to-install-ta-lib-in-python-on-window-9303eb003fbb
 
-    # Caso não consiga de jeito nenhum instalar a biblioteca Talib,
-    # uma última opção é "deletar" as duas linhas abaixo, o que deve reduzir bastante a acurácia do modelo
+    # Caso não consiga de jeito nenhum instalar a biblioteca Talib, uma última opção é "deletar" as duas linhas abaixo, o que deve reduzir bastante a acurácia do modelo
     #     data['ADX'] = ta.ADX(np.array(data['High']), np.array(data['Low']),np.array(data['Adj Close']))
     #     data['RSI'] = ta.RSI(np.array(data['Adj Close']))
 
@@ -996,15 +962,13 @@ for crypto_string in crypto_list:
 
     X = data.shift(1).dropna()
     y = signals[X.index[0]:]
-    # Vamos permitir iterações polinomiais de segunda ordem entre as variáveis explicativas dos sinais,
-    # para tornar o modelo menos linear
+    # Vamos permitir iterações polinomiais de segunda ordem entre as variáveis explicativas dos sinais, para tornar o modelo menos linear
     polynomial_interaction = PolynomialFeatures(degree=2, include_bias=False)
     X_poly = polynomial_interaction.fit_transform(X)
     X = pd.DataFrame(data=X_poly, index=X.index)
     # Gera Componentes Principais
     # Note que quando n_components =0.97, equivale a cuspir o número de componentes principais de tal forma que
-    # 97% da variância seja explicada. Portanto, o número de componentes será diferente para cada cryptomoeda,
-    # para cada modelo e para cada janela temporal...é variante no tempo!
+    # 97% da variância seja explicada. Portanto, o número de componentes será diferente para cada cryptomoeda, para cada modelo e para cada janela temporal...é variante no tempo!
 
     pca = PCA(n_components=0.97, whiten=True)
 
@@ -1030,21 +994,16 @@ for crypto_string in crypto_list:
     pred = []
     true_values = []
 
-    # Aqui faço um "expanding sample": A cada novo período, expando um ponto a amostra de treino,
-    # desloco um ponto para frente a amostra de validação
-    # e um ponto a observação de teste (mantendo o tamnho da amostra de validação e teste constantes,
-    # apenas a amostra de treino que cresce com o tempo)
-    # Este método visa replicar a estratégia real que teria sido feita caso replicássemos no passado o
-    # procedimento, semana após semana, até os dias atuais
+    # Aqui faço um "expanding sample": A cada novo período, expando um ponto a amostra de treino, desloco um ponto para frente a amostra de validação
+    # e um ponto a observação de teste (mantendo o tamnho da amostra de validação e teste constantes, apenas a amostra de treino que cresce com o tempo)
+    # Este método visa replicar a estratégia real que teria sido feita caso replicássemos no passado o procedimento, semana após semana, até os dias atuais
     # Este tipo de abordagem é usual na literatura de forecasting e de validação de modelos out-of-sample
     # O procedimento segue o paper "Empirical Asset Pricing via Machine Learning (2019) "
-    # Equivale a fazer previsão fora da amostra 1 passo à frente, com validação mensal dos hyperparâmetros e
-    # treino semanal dos parâmetros
+    # Equivale a fazer previsão fora da amostra 1 passo à frente, com validação mensal dos hyperparâmetros e treino semanal dos parâmetros
 
     for i in range(train_val + 1, len(X)):
         Xs = X.loc[:X.index[i]]
-        # Padroniza as variáveis para terem média zero e variância 1, de tal forma que o PCA não seja guiado por
-        # variáveis cuja variância se sobrepõe às outras variáveis
+        # Padroniza as variáveis para terem média zero e variância 1, de tal forma que o PCA não seja guiado por variáveis cuja variância se sobrepõe às outras variáveis
         Xs = StandardScaler().fit_transform(Xs)
         # Aplica PCA para amostra disponível no período, ou seja, treino + validação
 
@@ -1065,48 +1024,46 @@ for crypto_string in crypto_list:
             # parameter tuning
             best_score = 0
             # A cada 4 semanas, faz o procedimento de "Tuning Hyperparameters "
-            # Seleciona na amostra de validação o modelo que gera melhor acurácia fora da amostra para diferentes
-            # hyperparametros
+            # Seleciona na amostra de validação o modelo que gera melhor acurácia fora da amostra para diferentes hyperparametros
 
             for models in ['rbf', 'linear']:
                 for gamma in [0.001, 0.01, 0.1, 1, 10, 100]:
                     for c in [0.001, 0.01, 0.1, 1, 10, 100]:
                         # for each combination of parameters, train an SVC
                         svm = SVC(gamma=gamma, C=c)
-                        svm.fit(x_train, np.ravel(y_train, order='C'))
+                        svm.fit(x_train, y_train)
                         # evaluate the SVC on the test set
-                        score = svm.score(x_val, np.ravel(y_val, order='C'))
+                        score = svm.score(x_val, y_val)
                         # if we got a better score, store the score and parameters
                         if score > best_score:
                             best_score = score
                             best_parameters = {'C': c, 'gamma': gamma, 'Kernel': models}
 
             # Escolhido o melhor modelo, faça fit dos dados in-sample com a amostra de treino + validação
-            # Gere out-of-sample forecasting um passo à frente para gerar o sinal prevista para o
-            # portfólio da semana seguinte
+            # Gere out-of-sample forecasting um passo à frente para gerar o sinal prevista para o portfólio da semana seguinte
 
             scores_final_svc.set_value(x_test.index, crypto_string, best_score)
             model = SVC(C=best_parameters['C'], class_weight=None, gamma=best_parameters['gamma'],
                         kernel=best_parameters['Kernel'])
-            model.fit(x_train_val, np.ravel(y_train_val, order='C'))
+            model.fit(x_train_val, y_train_val)
             signal_svc.set_value(x_test.index, crypto_string, model.predict(x_test)[0])
             pred.append(model.predict(x_test)[0])
             true_values.append(y_test['Signals'][0])
             param.append(best_parameters)
 
+
         else:
             # Se não cair na semana de fazer o Tuning hyperparamenter, fite os dados normalmente e gere previsões
-            # Treinando o mesmo modelo usado anteriormente (melhor modelo escolhido algumas semanas atrás)
-            # na amostra treino + validação
+            # Treinando o mesmo modelo usado anteriormente (melhor modelo escolhido algumas semanas atrás)  na amostra treino + validação
             # Gera forecasting um passo à frente fora da amostra
 
             model = SVC(C=best_parameters['C'], class_weight=None, gamma=best_parameters['gamma'],
                         kernel=best_parameters['Kernel'])
-            model.fit(x_train_val, np.ravel(y_train_val, order='C'))
+            model.fit(x_train_val, y_train_val)
             pred.append(model.predict(x_test)[0])
             signal_svc.set_value(x_test.index, crypto_string, model.predict(x_test)[0])
-            model.fit(x_train, np.ravel(y_train, order='C'))
-            scores_final_svc.set_value(x_test.index, crypto_string, model.score(x_val, np.ravel(y_val, order='C')))
+            model.fit(x_train, y_train)
+            scores_final_svc.set_value(x_test.index, crypto_string, model.score(x_val, y_val))
 
             true_values.append(y_test['Signals'][0])
             scores.append(score)
@@ -1164,7 +1121,7 @@ return_final_svc.dropna(axis=0, how='all').plot()
 
 ######################
 
-# Roda Equally Weighted ####
+### Roda Equally Weighted ####
 
 signals_ew = signal_svc.dropna(axis=0, how='all').fillna(0)  # .dropna(axis=1,how='any')
 
@@ -1187,8 +1144,7 @@ strat_index_svc_ew = pd.DataFrame(data={'Return': (ew_weights * returns_ew).drop
 strat_index_svc_ew['Level'].iloc[0] = 100
 
 for d, dm1 in zip(strat_index_svc_ew.index[1:], strat_index_svc_ew.index[:-1]):
-    strat_index_svc_ew['Level'].loc[d] = strat_index_svc_ew['Level'].loc[dm1] *\
-                                         (1 + strat_index_svc_ew['Return'].loc[d])
+    strat_index_svc_ew['Level'].loc[d] = strat_index_svc_ew['Level'].loc[dm1] * (1 + strat_index_svc_ew['Return'].loc[d])
 
 strat_index_svc_ew['Level'].plot(figsize=(8, 5))
 
@@ -1200,14 +1156,13 @@ vol_y_svc_ew = strat_index_svc_ew['Level'].pct_change(1).rolling(52).aggregate(n
 SR_svc_ew = ret_y_svc_ew / vol_y_svc_ew
 # SR.plot()
 
-SR_mean_svc_ew = (strat_index_svc_ew['Level'].pct_change(1).mean() * 52) /\
-                 (strat_index_svc_ew['Level'].pct_change(1).std() * np.sqrt(52))
+SR_mean_svc_ew = (strat_index_svc_ew['Level'].pct_change(1).mean() * 52) / (strat_index_svc_ew['Level'].pct_change(1).std() * np.sqrt(52))
 
 print(SR_mean_svc_ew)
 
 ######################################
 
-# Roda IVP ###
+## Roda IVP ###
 
 signals_ivp = signal_svc.dropna(axis=0, how='all').fillna(0)  # .dropna(axis=1,how='any')
 ivp_weights = pd.DataFrame(data=0, index=signals_ivp.index, columns=signals_ivp.columns)
@@ -1237,8 +1192,7 @@ strat_index_svc_ivp = pd.DataFrame(data={'Return': (ivp_weights * returns_ivp).d
 strat_index_svc_ivp['Level'].iloc[0] = 100
 
 for d, dm1 in zip(strat_index_svc_ivp.index[1:], strat_index_svc_ivp.index[:-1]):
-    strat_index_svc_ivp['Level'].loc[d] = strat_index_svc_ivp['Level'].loc[dm1] *\
-                                          (1 + strat_index_svc_ivp['Return'].loc[d])
+    strat_index_svc_ivp['Level'].loc[d] = strat_index_svc_ivp['Level'].loc[dm1] * (1 + strat_index_svc_ivp['Return'].loc[d])
 
 strat_index_svc_ivp['Level'].plot(figsize=(8, 5))
 
@@ -1248,14 +1202,13 @@ vol_y_svc_ivp = strat_index_svc_ivp['Level'].pct_change(1).rolling(52).aggregate
 
 SR_svc_ivp = ret_y_svc_ivp / vol_y_svc_ivp
 
-SR_mean_svc_ivp = (strat_index_svc_ivp['Level'].pct_change(1).mean() * 52) /\
-                  (strat_index_svc_ivp['Level'].pct_change(1).std() * np.sqrt(52))
+SR_mean_svc_ivp = (strat_index_svc_ivp['Level'].pct_change(1).mean() * 52) / (strat_index_svc_ivp['Level'].pct_change(1).std() * np.sqrt(52))
 
 print(SR_mean_svc_ivp)
 
 ######################################
 
-# RODA MVO ###
+#### RODA MVO ###
 
 signals_mvp = signal_svc.dropna(axis=0, how='all').fillna(0)
 return_mvp = returns_svc.dropna(axis=0, how='all').fillna(0)
@@ -1282,8 +1235,7 @@ strat_index_svc_mvp = pd.DataFrame(data={'Return': (mvp_weights * return_mvp).dr
 strat_index_svc_mvp['Level'].iloc[0] = 100
 
 for d, dm1 in zip(strat_index_svc_mvp.index[1:], strat_index_svc_mvp.index[:-1]):
-    strat_index_svc_mvp['Level'].loc[d] = strat_index_svc_mvp['Level'].loc[dm1] *\
-                                          (1 + strat_index_svc_mvp['Return'].loc[d])
+    strat_index_svc_mvp['Level'].loc[d] = strat_index_svc_mvp['Level'].loc[dm1] * (1 + strat_index_svc_mvp['Return'].loc[d])
 
 strat_index_svc_mvp['Level'].plot(figsize=(8, 5))
 
@@ -1293,15 +1245,14 @@ vol_y_svc_mvp = strat_index_svc_mvp['Level'].pct_change(1).rolling(52).aggregate
 
 SR_svc_mvp = ret_y_svc_mvp / vol_y_svc_mvp
 
-SR_mean_svc_mvp = (strat_index_svc_mvp['Level'].pct_change(1).mean() * 52) /\
-                  (strat_index_svc_mvp['Level'].pct_change(1).std() * np.sqrt(52))
+SR_mean_svc_mvp = (strat_index_svc_mvp['Level'].pct_change(1).mean() * 52) / (strat_index_svc_mvp['Level'].pct_change(1).std() * np.sqrt(52))
 
 print(SR_mean_svc_mvp)
 
 #########################################
 
 ######################
-# PESOS por HYERARCHICAL CLUSTERING #######
+#### PESOS por HYERARCHICAL CLUSTERING #######
 
 signals_cluster = signal_svc.dropna(axis=0, how='all').fillna(0)
 return_cluster = returns_svc.dropna(axis=0, how='all').fillna(0)
@@ -1323,14 +1274,12 @@ for d in tqdm(hrp_weights.index[i:]):
     for tracker in tqdm(hrp_weights.columns):
         hrp_weights[tracker].loc[d] = w[tracker]
 
-strat_index_svc_cluster =\
-    pd.DataFrame(data={'Return': (hrp_weights * return_cluster).dropna().sum(axis=1), 'Level': np.nan})
+strat_index_svc_cluster = pd.DataFrame(data={'Return': (hrp_weights * return_cluster).dropna().sum(axis=1), 'Level': np.nan})
 
 strat_index_svc_cluster['Level'].iloc[0] = 100
 
 for d, dm1 in zip(strat_index_svc_cluster.index[1:], strat_index_svc_cluster.index[:-1]):
-    strat_index_svc_cluster['Level'].loc[d] = strat_index_svc_cluster['Level'].loc[dm1] *\
-                                              (1 + strat_index_svc_cluster['Return'].loc[d])
+    strat_index_svc_cluster['Level'].loc[d] = strat_index_svc_cluster['Level'].loc[dm1] * (1 + strat_index_svc_cluster['Return'].loc[d])
 
 strat_index_svc_cluster['Level'].plot(figsize=(8, 5))
 
@@ -1340,8 +1289,7 @@ vol_y_svc_cluster = strat_index_svc_cluster['Level'].pct_change(1).rolling(52).a
 
 SR_svc_cluster = ret_y_svc_cluster / vol_y_svc_cluster
 
-SR_mean_svc_cluster = (strat_index_svc_cluster['Level'].pct_change(1).mean() * 52) /\
-                      (strat_index_svc_cluster['Level'].pct_change(1).std() * np.sqrt(52))
+SR_mean_svc_cluster = (strat_index_svc_cluster['Level'].pct_change(1).mean() * 52) / (strat_index_svc_cluster['Level'].pct_change(1).std() * np.sqrt(52))
 
 print(SR_mean_svc_cluster)
 
@@ -1362,8 +1310,8 @@ signal_svc = signal_svc.dropna(axis=0, how='all').fillna(0)
 
 
 # Função que gera sinais, dados os valores de entrada
-def make_signal(x1):
-    if x1 > 0:
+def make_signal(x):
+    if x > 0:
         return 1
     else:
         return -1
@@ -1381,8 +1329,7 @@ for d in signal_combination.index:
             comb = signal_knn[crypto].loc[d] * (scores_final_knn[crypto].loc[d] / scores_final_knn[crypto].loc[d] +
                                                 scores_final_logit[crypto].loc[d] + scores_final_svc[crypto].loc[d]) + \
                    signal_logit[crypto].loc[d] * (signal_logit[crypto].loc[d] / scores_final_knn[crypto].loc[d] +
-                                                  scores_final_logit[crypto].loc[d] +
-                                                  scores_final_svc[crypto].loc[d]) + \
+                                                  scores_final_logit[crypto].loc[d] + scores_final_svc[crypto].loc[d]) + \
                    signal_svc[crypto].loc[d] * (signal_svc[crypto].loc[d] / scores_final_knn[crypto].loc[d] +
                                                 scores_final_logit[crypto].loc[d] + scores_final_svc[crypto].loc[d])
 
@@ -1403,7 +1350,7 @@ for d in signal_combination.index:
 
 ######################
 
-# Roda Equally Weighted Portfolio do modelo Combination ####
+### Roda Equally Weighted Portfolio do modelo Combination ####
 
 signals_ew = signal_combination
 
@@ -1426,8 +1373,7 @@ strat_index_comb_ew = pd.DataFrame(data={'Return': (ew_weights * returns_ew).dro
 strat_index_comb_ew['Level'].iloc[0] = 100
 
 for d, dm1 in zip(strat_index_comb_ew.index[1:], strat_index_comb_ew.index[:-1]):
-    strat_index_comb_ew['Level'].loc[d] = strat_index_comb_ew['Level'].loc[dm1] *\
-                                          (1 + strat_index_comb_ew['Return'].loc[d])
+    strat_index_comb_ew['Level'].loc[d] = strat_index_comb_ew['Level'].loc[dm1] * (1 + strat_index_comb_ew['Return'].loc[d])
 
 strat_index_comb_ew['Level'].plot(figsize=(8, 5))
 
@@ -1439,15 +1385,14 @@ vol_y_comb_ew = strat_index_comb_ew['Level'].pct_change(1).rolling(52).aggregate
 SR_comb_ew = ret_y_comb_ew / vol_y_comb_ew
 # SR.plot()
 
-SR_mean_comb_ew = (strat_index_comb_ew['Level'].pct_change(1).mean() * 52) /\
-                  (strat_index_comb_ew['Level'].pct_change(1).std() * np.sqrt(52))
+SR_mean_comb_ew = (strat_index_comb_ew['Level'].pct_change(1).mean() * 52) / (strat_index_comb_ew['Level'].pct_change(1).std() * np.sqrt(52))
 
 # Sharp Ratio médio
 print(SR_mean_comb_ew)
 
 ######################################
 
-# Roda IVP Portfólio para o modelo Combination ###
+## Roda IVP Portfólio para o modelo Combination ###
 
 signals_ivp = signal_combination
 ivp_weights = pd.DataFrame(data=0, index=signals_ivp.index, columns=signals_ivp.columns)
@@ -1477,8 +1422,7 @@ strat_index_comb_ivp = pd.DataFrame(data={'Return': (ivp_weights * returns_ivp).
 strat_index_comb_ivp['Level'].iloc[0] = 100
 
 for d, dm1 in zip(strat_index_comb_ivp.index[1:], strat_index_comb_ivp.index[:-1]):
-    strat_index_comb_ivp['Level'].loc[d] = strat_index_comb_ivp['Level'].loc[dm1] *\
-                                           (1 + strat_index_comb_ivp['Return'].loc[d])
+    strat_index_comb_ivp['Level'].loc[d] = strat_index_comb_ivp['Level'].loc[dm1] * (1 + strat_index_comb_ivp['Return'].loc[d])
 
 strat_index_comb_ivp['Level'].plot(figsize=(8, 5))
 
@@ -1488,14 +1432,13 @@ vol_y_comb_ivp = strat_index_comb_ivp['Level'].pct_change(1).rolling(52).aggrega
 
 SR_comb_ivp = ret_y_comb_ivp / vol_y_comb_ivp
 
-SR_mean_comb_ivp = (strat_index_comb_ivp['Level'].pct_change(1).mean() * 52) /\
-                   (strat_index_comb_ivp['Level'].pct_change(1).std() * np.sqrt(52))
+SR_mean_comb_ivp = (strat_index_comb_ivp['Level'].pct_change(1).mean() * 52) / (strat_index_comb_ivp['Level'].pct_change(1).std() * np.sqrt(52))
 
 print(SR_mean_comb_ivp)
 
 ######################################
 
-# RODA MVO Portfólio para o modelo Combination ###
+#### RODA MVO Portfólio para o modelo Combination ###
 
 signals_mvp = signal_combination
 return_mvp = returns_combination.dropna(axis=0, how='all').fillna(0)
@@ -1510,8 +1453,7 @@ for d in mvp_weights.index:
 
 i = mvp_weights['BTC-USD'].sum()
 
-for d in tqdm(
-        mvp_weights.index[i:]):
+for d in tqdm(mvp_weights.index[i:]):
     ret = df_returns.loc[:d + datetime.timedelta(-1)].dropna(axis=0, how='all').dropna(axis=1, how='all')
     mvp = MinVar(ret)
     w = mvp.weights
@@ -1523,8 +1465,7 @@ strat_index_comb_mvp = pd.DataFrame(data={'Return': (mvp_weights * return_mvp).d
 strat_index_comb_mvp['Level'].iloc[0] = 100
 
 for d, dm1 in zip(strat_index_comb_mvp.index[1:], strat_index_comb_mvp.index[:-1]):
-    strat_index_comb_mvp['Level'].loc[d] = \
-        strat_index_comb_mvp['Level'].loc[dm1] * (1 + strat_index_comb_mvp['Return'].loc[d])
+    strat_index_comb_mvp['Level'].loc[d] = strat_index_comb_mvp['Level'].loc[dm1] * (1 + strat_index_comb_mvp['Return'].loc[d])
 
 strat_index_comb_mvp['Level'].plot(figsize=(8, 5))
 
@@ -1534,15 +1475,14 @@ vol_y_comb_mvp = strat_index_comb_mvp['Level'].pct_change(1).rolling(52).aggrega
 
 SR_comb_mvp = ret_y_comb_mvp / vol_y_comb_mvp
 
-SR_mean_comb_mvp = (strat_index_comb_mvp['Level'].pct_change(1).mean() * 52) /\
-                   (strat_index_comb_mvp['Level'].pct_change(1).std() * np.sqrt(52))
+SR_mean_comb_mvp = (strat_index_comb_mvp['Level'].pct_change(1).mean() * 52) / (strat_index_comb_mvp['Level'].pct_change(1).std() * np.sqrt(52))
 
 print(SR_mean_comb_mvp)
 
 #########################################
 
 ######################
-# PESOS por HYERARCHICAL CLUSTERING Portfólio para o modelo Combination#######
+#### PESOS por HYERARCHICAL CLUSTERING Portfólio para o modelo Combination#######
 
 signals_cluster = signal_combination
 return_cluster = returns_combination.dropna(axis=0, how='all').fillna(0)
@@ -1564,14 +1504,12 @@ for d in tqdm(hrp_weights.index[i:]):
     for tracker in tqdm(hrp_weights.columns):
         hrp_weights[tracker].loc[d] = w[tracker]
 
-strat_index_comb_cluster = \
-    pd.DataFrame(data={'Return': (hrp_weights * return_cluster).dropna().sum(axis=1), 'Level': np.nan})
+strat_index_comb_cluster = pd.DataFrame(data={'Return': (hrp_weights * return_cluster).dropna().sum(axis=1), 'Level': np.nan})
 
 strat_index_comb_cluster['Level'].iloc[0] = 100
 
 for d, dm1 in zip(strat_index_comb_cluster.index[1:], strat_index_comb_cluster.index[:-1]):
-    strat_index_comb_cluster['Level'].loc[d] = strat_index_comb_cluster['Level'].loc[dm1] *\
-                                               (1 + strat_index_comb_cluster['Return'].loc[d])
+    strat_index_comb_cluster['Level'].loc[d] = strat_index_comb_cluster['Level'].loc[dm1] * (1 + strat_index_comb_cluster['Return'].loc[d])
 
 strat_index_comb_cluster['Level'].plot(figsize=(8, 5))
 
@@ -1581,15 +1519,14 @@ vol_y_comb_cluster = strat_index_comb_cluster['Level'].pct_change(1).rolling(52)
 
 SR_comb_cluster = ret_y_comb_cluster / vol_y_comb_cluster
 
-SR_mean_comb_cluster = (strat_index_comb_cluster['Level'].pct_change(1).mean() * 52) /\
-                       (strat_index_comb_cluster['Level'].pct_change(1).std() * np.sqrt(52))
+SR_mean_comb_cluster = (strat_index_comb_cluster['Level'].pct_change(1).mean() * 52) / (strat_index_comb_cluster['Level'].pct_change(1).std() * np.sqrt(52))
 
 print(SR_mean_comb_cluster)
 
 #########################################
 
 
-# BOOTSTRAP ###
+#### BOOTSTRAP ###
 
 
 frames = [strat_index_comb_ew['Level'], strat_index_comb_ivp['Level'], strat_index_comb_mvp['Level'],
@@ -1648,36 +1585,36 @@ for i, model in enumerate(backtests.columns):
 ###################################################################################
 # Function to give some analysis
 
-def getperformancetable(indexseries, freq='Daily'):
+def GetPerformanceTable(IndexSeries, freq='Daily'):
     adju_factor = 252.0
     if freq == 'Monthly':
         adju_factor = 12.0
     elif freq == 'Weekly':
         adju_factor = 52.0
 
-    table = pd.Series(index=['Excess Return', 'Volatility', 'Sharpe', 'Sortino', 'Max Drawdown',
+    Table = pd.Series(index=['Excess Return', 'Volatility', 'Sharpe', 'Sortino', 'Max Drawdown',
                              'Max Drawdown in Vol Terms', '5th percentile in Vol Terms',
                              '10th percentile in Vol Terms'])
 
-    cleanindexseries = indexseries.dropna().sort_index()
+    CleanIndexSeries = IndexSeries.dropna().sort_index()
 
-    er_index = pd.Series(index=cleanindexseries.index)
-    er_index[cleanindexseries.index[0]] = 100.0
-    for d3, d_minus_1 in zip(er_index.index[1:], er_index.index[:-1]):
-        er = cleanindexseries[d3] / cleanindexseries[d_minus_1] - 1.0
-        er_index[d3] = er_index[d_minus_1] * (1 + er)
+    ER_index = pd.Series(index=CleanIndexSeries.index)
+    ER_index[CleanIndexSeries.index[0]] = 100.0
+    for d, d_minus_1 in zip(ER_index.index[1:], ER_index.index[:-1]):
+        ER = CleanIndexSeries[d] / CleanIndexSeries[d_minus_1] - 1.0
+        ER_index[d] = ER_index[d_minus_1] * (1 + ER)
 
-    table['Excess Return'] = (cleanindexseries[-1] / cleanindexseries[0]) ** (
-                adju_factor / (len(cleanindexseries) - 1.0)) - 1
-    table['Volatility'] = (np.log(er_index).diff(1).dropna()).std() * np.sqrt(adju_factor)
-    table['Sharpe'] = table['Excess Return'] / table['Volatility']
-    table['Sortino'] = table['Excess Return'] / (np.sqrt(adju_factor) * (
-        np.log(er_index).diff(1).dropna()[np.log(er_index).diff(1).dropna() < 0.0]).std())
-    table['Max Drawdown'] = max_dd(er_index)
-    table['Max Drawdown in Vol Terms'] = max_dd(er_index) / table['Volatility']
-    table['5th percentile in Vol Terms'] = (er_index.pct_change(1).dropna()).quantile(q=0.05) / table['Volatility']
-    table['10th percentile in Vol Terms'] = (er_index.pct_change(1).dropna()).quantile(q=0.1) / table['Volatility']
-    return table
+    Table['Excess Return'] = (CleanIndexSeries[-1] / CleanIndexSeries[0]) ** (
+                adju_factor / (len(CleanIndexSeries) - 1.0)) - 1
+    Table['Volatility'] = (np.log(ER_index).diff(1).dropna()).std() * np.sqrt(adju_factor)
+    Table['Sharpe'] = Table['Excess Return'] / Table['Volatility']
+    Table['Sortino'] = Table['Excess Return'] / (np.sqrt(adju_factor) * (
+        np.log(ER_index).diff(1).dropna()[np.log(ER_index).diff(1).dropna() < 0.0]).std())
+    Table['Max Drawdown'] = max_dd(ER_index)
+    Table['Max Drawdown in Vol Terms'] = max_dd(ER_index) / Table['Volatility']
+    Table['5th percentile in Vol Terms'] = (ER_index.pct_change(1).dropna()).quantile(q=0.05) / Table['Volatility']
+    Table['10th percentile in Vol Terms'] = (ER_index.pct_change(1).dropna()).quantile(q=0.1) / Table['Volatility']
+    return Table
 
 
 def max_dd(ser):
@@ -1700,7 +1637,7 @@ for i, model in enumerate(backtests.columns):
     plt.title(model)
     plt.show()
 
-    descriptions[model] = getperformancetable(backtests[model], 'Weekly')
+    descriptions[model] = GetPerformanceTable(backtests[model], 'Weekly')
 
 descriptions.to_excel('Stats.xlsx')
 
@@ -1708,7 +1645,7 @@ descriptions.to_excel('Stats.xlsx')
 
 betas = pd.DataFrame(index=backtests.columns, columns=["Beta", 'PValue'])
 
-for model in backtests.columns:
+for model in (backtests.columns):
     x = df_mercado['Index'].pct_change(1)
     x = sm.add_constant(x)
     x = x.dropna()
