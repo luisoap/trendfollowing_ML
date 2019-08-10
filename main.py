@@ -214,8 +214,8 @@ for crypto_string in crypto_list:
             # hyperparametros
             for k in range(1, 13, 2):
                 knn = KNeighborsClassifier(n_neighbors=k)
-                knn.fit(x_train, y_train)
-                score = knn.score(x_val, y_val)
+                knn.fit(x_train, y_train.values.ravel())
+                score = knn.score(x_val, y_val.values.ravel())
 
                 if score > best_score:
                     best_score = score
@@ -226,7 +226,7 @@ for crypto_string in crypto_list:
             # Gere out-of-sample forecasting um passo à frente para gerar o sinal prevista para o portfólio da semana seguinte
             scores_final_knn.at[x_test.index, crypto_string] = best_score
             model = KNeighborsClassifier(n_neighbors = best_parameter, n_jobs=2)
-            model.fit(x_train_val, y_train_val)
+            model.fit(x_train_val, y_train_val.values.ravel())
             signal_knn.at[x_test.index, crypto_string] = model.predict(x_test)[0]
             pred.append(model.predict(x_test)[0])
             true_values.append(y_test['Signals'][0])
@@ -237,11 +237,11 @@ for crypto_string in crypto_list:
             # Treinando o mesmo modelo usado anteriormente (melhor modelo escolhido algumas semanas atrás)  na amostra treino + validação
             # Gera forecasting um passo à frente fora da amostra
             model = KNeighborsClassifier(n_neighbors=best_parameter)
-            model.fit(x_train_val, y_train_val)
+            model.fit(x_train_val, y_train_val.values.ravel())
             signal_knn.at[x_test.index, crypto_string] = model.predict(x_test)[0]
             pred.append(model.predict(x_test)[0])
-            model.fit(x_train, y_train)
-            scores_final_knn.at[x_test.index, crypto_string] = model.score(x_val, y_val)
+            model.fit(x_train, y_train.values.ravel())
+            scores_final_knn.at[x_test.index, crypto_string] = model.score(x_val, y_val.values.ravel())
 
             true_values.append(y_test['Signals'][0])
             param.append(best_parameter)
@@ -273,8 +273,7 @@ for crypto_string in crypto_list:
     SR = ret_y / vol_y
     # SR.plot()
 
-    SR_mean = (strat_index['Level'].pct_change(1).mean() * 52) / (
-                strat_index['Level'].pct_change(1).std() * np.sqrt(52))
+    SR_mean = (strat_index['Level'].pct_change(1).mean() * 52) / (strat_index['Level'].pct_change(1).std() * np.sqrt(52))
 
     summary_final_knn['Accuracy'].loc[crypto_string] = accuracy
     summary_final_knn['Sharp'].loc[crypto_string] = SR_mean
@@ -618,8 +617,8 @@ for crypto_string in crypto_list:
             for c in [0.01, 0.1, 1, 10, 100]:
                 for l in ['l1', 'l2', 'none']:
                     logit = LogisticRegression(penalty=l, C=c, solver='saga')
-                    logit.fit(x_train, y_train)
-                    score = logit.score(x_val, y_val)
+                    logit.fit(x_train, y_train.values.ravel())
+                    score = logit.score(x_val, y_val.values.ravel())
 
                     if score > best_score:
                         best_score = score
@@ -630,7 +629,7 @@ for crypto_string in crypto_list:
 
             scores_final_logit.at[x_test.index, crypto_string] = best_score
             model = LogisticRegression(penalty=best_parameters['Penalty'], C=best_parameters['C'], solver='saga')
-            model.fit(x_train_val, y_train_val)
+            model.fit(x_train_val, y_train_val.values.ravel())
             signal_logit.at[x_test.index, crypto_string] = model.predict(x_test)[0]
             pred.append(model.predict(x_test)[0])
             true_values.append(y_test['Signals'][0])
@@ -642,11 +641,11 @@ for crypto_string in crypto_list:
             # Gera forecasting um passo à frente fora da amostra
 
             model = LogisticRegression(C=best_parameters['C'], penalty=best_parameters['Penalty'], solver='saga')
-            model.fit(x_train_val, y_train_val)
+            model.fit(x_train_val, y_train_val.values.ravel())
             pred.append(model.predict(x_test)[0])
             signal_logit.at[x_test.index, crypto_string] = model.predict(x_test)[0]
-            model.fit(x_train, y_train)
-            scores_final_logit.at[x_test.index, crypto_string] = model.score(x_val, y_val)
+            model.fit(x_train, y_train.values.ravel())
+            scores_final_logit.at[x_test.index, crypto_string] = model.score(x_val, y_val.values.ravel())
             true_values.append(y_test['Signals'][0])
 
     accuracy = accuracy_score(true_values, pred)
@@ -1023,9 +1022,9 @@ for crypto_string in crypto_list:
                     for c in [0.001, 0.01, 0.1, 1, 10, 100]:
                         # for each combination of parameters, train an SVC
                         svm = SVC(gamma=gamma, C=c)
-                        svm.fit(x_train, y_train)
+                        svm.fit(x_train, y_train.values.ravel())
                         # evaluate the SVC on the test set
-                        score = svm.score(x_val, y_val)
+                        score = svm.score(x_val, y_val.values.ravel())
                         # if we got a better score, store the score and parameters
                         if score > best_score:
                             best_score = score
@@ -1037,7 +1036,7 @@ for crypto_string in crypto_list:
             scores_final_svc.at[x_test.index, crypto_string] = best_score
             model = SVC(C=best_parameters['C'], class_weight=None, gamma=best_parameters['gamma'],
                         kernel=best_parameters['Kernel'])
-            model.fit(x_train_val, y_train_val)
+            model.fit(x_train_val, y_train_val.values.ravel())
             signal_svc.at[x_test.index, crypto_string] = model.predict(x_test)[0]
             pred.append(model.predict(x_test)[0])
             true_values.append(y_test['Signals'][0])
@@ -1051,11 +1050,11 @@ for crypto_string in crypto_list:
 
             model = SVC(C=best_parameters['C'], class_weight=None, gamma=best_parameters['gamma'],
                         kernel=best_parameters['Kernel'])
-            model.fit(x_train_val, y_train_val)
+            model.fit(x_train_val, y_train_val.values.ravel())
             pred.append(model.predict(x_test)[0])
             signal_svc.at[x_test.index, crypto_string] = model.predict(x_test)[0]
-            model.fit(x_train, y_train)
-            scores_final_svc.at[x_test.index, crypto_string] = model.score(x_val, y_val)
+            model.fit(x_train, y_train.values.ravel())
+            scores_final_svc.at[x_test.index, crypto_string] = model.score(x_val, y_val.values.ravel())
 
             true_values.append(y_test['Signals'][0])
             scores.append(score)
