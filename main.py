@@ -224,10 +224,10 @@ for crypto_string in crypto_list:
 
             # Escolhido o melhor modelo, faça fit dos dados in-sample com a amostra de treino + validação
             # Gere out-of-sample forecasting um passo à frente para gerar o sinal prevista para o portfólio da semana seguinte
-            scores_final_knn.set_value(x_test.index, crypto_string, best_score)
+            scores_final_knn.at[x_test.index, crypto_string] = best_score
             model = KNeighborsClassifier(n_neighbors = best_parameter, n_jobs=2)
             model.fit(x_train_val, y_train_val)
-            signal_knn.set_value(x_test.index, crypto_string, model.predict(x_test)[0])
+            signal_knn.at[x_test.index, crypto_string] = model.predict(x_test)[0]
             pred.append(model.predict(x_test)[0])
             true_values.append(y_test['Signals'][0])
             param.append(best_parameter)
@@ -238,10 +238,10 @@ for crypto_string in crypto_list:
             # Gera forecasting um passo à frente fora da amostra
             model = KNeighborsClassifier(n_neighbors=best_parameter)
             model.fit(x_train_val, y_train_val)
-            signal_knn.set_value(x_test.index, crypto_string, model.predict(x_test)[0])
+            signal_knn.at[x_test.index, crypto_string] = model.predict(x_test)[0]
             pred.append(model.predict(x_test)[0])
             model.fit(x_train, y_train)
-            scores_final_knn.set_value(x_test.index, crypto_string, model.score(x_val, y_val))
+            scores_final_knn.at[x_test.index, crypto_string] = model.score(x_val, y_val)
 
             true_values.append(y_test['Signals'][0])
             param.append(best_parameter)
@@ -254,13 +254,9 @@ for crypto_string in crypto_list:
 
     for d in signal_knn.index:
         if signal_knn[crypto_string].loc[d] == 1:
-            returns_knn.set_value(d, crypto_string, (1 - CT) * (
-                        df[crypto_string]['Adj Close'].loc[d] / df[crypto_string]['Adj Close'].loc[:d].iloc[-2]) - 1 -
-                                  df_livre_risco['IRX Semanal'].loc[d])
+            returns_knn.at[d, crypto_string] = (1 - CT) * (df[crypto_string]['Adj Close'].loc[d] / df[crypto_string]['Adj Close'].loc[:d].iloc[-2]) - 1 - df_livre_risco['IRX Semanal'].loc[d]
         elif signal_knn[crypto_string].loc[d] == -1:
-            returns_knn.set_value(d, crypto_string, (1 - CT) * (
-                        df[crypto_string]['Adj Close'].loc[:d].iloc[-2] / df[crypto_string]['Adj Close'].loc[d]) - 1 -
-                                  df_livre_risco['IRX Semanal'].loc[d])
+            returns_knn.at[d, crypto_string] = (1 - CT) * (df[crypto_string]['Adj Close'].loc[:d].iloc[-2] / df[crypto_string]['Adj Close'].loc[d]) - 1 - df_livre_risco['IRX Semanal'].loc[d]
 
     strat_index = pd.DataFrame(index=X.index[train_val:], columns=['Returns', 'Level'])
 
@@ -285,7 +281,7 @@ for crypto_string in crypto_list:
     summary_final_knn['Mean Return'].loc[crypto_string] = strat_index['Returns'].mean() * 52
 
     for d in strat_index.index:
-        return_final_knn.set_value(d, crypto_string, strat_index['Level'].loc[d])
+        return_final_knn.at[d, crypto_string] = strat_index['Level'].loc[d]
 #        signal_final_knn.set_value(d,crypto_string, signal_knn[crypto_string].loc[d])
 
 
@@ -312,9 +308,9 @@ soma = abs(signal_knn.dropna(axis=0, how='all')).sum(axis=1)
 for d in ew_weights.index:
     for tracker in ew_weights.columns:
         if signals_ew[tracker].loc[d] == 0:
-            ew_weights.set_value(d, tracker, 0)
+            ew_weights.at[d, tracker] = 0
         else:
-            ew_weights.set_value(d, tracker, 1 / soma.loc[d])
+            ew_weights.at[d, tracker] = 1 / soma.loc[d]
 
     #    weights_ew = ew_weights
 returns_ew = returns_knn.dropna(axis=0, how='all').fillna(0)  # [1:]
@@ -632,10 +628,10 @@ for crypto_string in crypto_list:
             # Escolhido o melhor modelo, faça fit dos dados in-sample com a amostra de treino + validação
             # Gere out-of-sample forecasting um passo à frente para gerar o sinal prevista para o portfólio da semana seguinte
 
-            scores_final_logit.set_value(x_test.index, crypto_string, best_score)
+            scores_final_logit.at[x_test.index, crypto_string] = best_score
             model = LogisticRegression(penalty=best_parameters['Penalty'], C=best_parameters['C'], solver='saga')
             model.fit(x_train_val, y_train_val)
-            signal_logit.set_value(x_test.index, crypto_string, model.predict(x_test)[0])
+            signal_logit.at[x_test.index, crypto_string] = model.predict(x_test)[0]
             pred.append(model.predict(x_test)[0])
             true_values.append(y_test['Signals'][0])
             param.append(best_parameters)
@@ -648,9 +644,9 @@ for crypto_string in crypto_list:
             model = LogisticRegression(C=best_parameters['C'], penalty=best_parameters['Penalty'], solver='saga')
             model.fit(x_train_val, y_train_val)
             pred.append(model.predict(x_test)[0])
-            signal_logit.set_value(x_test.index, crypto_string, model.predict(x_test)[0])
+            signal_logit.at[x_test.index, crypto_string] = model.predict(x_test)[0]
             model.fit(x_train, y_train)
-            scores_final_logit.set_value(x_test.index, crypto_string, model.score(x_val, y_val))
+            scores_final_logit.at[x_test.index, crypto_string] = model.score(x_val, y_val)
             true_values.append(y_test['Signals'][0])
 
     accuracy = accuracy_score(true_values, pred)
@@ -660,13 +656,9 @@ for crypto_string in crypto_list:
     # Se sinal era de venda (-1), retornos são invertidos
     for d in signal_logit.index:
         if signal_logit[crypto_string].loc[d] == 1:
-            returns_logit.set_value(d, crypto_string, (1 - CT) * (
-                        df[crypto_string]['Adj Close'].loc[d] / df[crypto_string]['Adj Close'].loc[:d].iloc[-2]) - 1 -
-                                    df_livre_risco['IRX Semanal'].loc[d])
+            returns_logit.at[d, crypto_string] = (1 - CT) * (df[crypto_string]['Adj Close'].loc[d] / df[crypto_string]['Adj Close'].loc[:d].iloc[-2]) - 1 - df_livre_risco['IRX Semanal'].loc[d]
         elif signal_logit[crypto_string].loc[d] == -1:
-            returns_logit.set_value(d, crypto_string, (1 - CT) * (
-                        df[crypto_string]['Adj Close'].loc[:d].iloc[-2] / df[crypto_string]['Adj Close'].loc[d]) - 1 -
-                                    df_livre_risco['IRX Semanal'].loc[d])
+            returns_logit.at[d, crypto_string] = (1 - CT) * (df[crypto_string]['Adj Close'].loc[:d].iloc[-2] / df[crypto_string]['Adj Close'].loc[d]) - 1 - df_livre_risco['IRX Semanal'].loc[d]
 
     strat_index = pd.DataFrame(index=X.index[train_val:], columns=['Returns', 'Level'])
 
@@ -691,7 +683,7 @@ for crypto_string in crypto_list:
     summary_final_logit['Mean Return'].loc[crypto_string] = strat_index['Returns'].mean() * 52
 
     for d in strat_index.index:
-        return_final_logit.set_value(d, crypto_string, strat_index['Level'].loc[d])
+        return_final_logit.at[d, crypto_string] = strat_index['Level'].loc[d]
 #        signal_final_logit.set_value(d,crypto_string, signal_logit[crypto_string].loc[d])
 
 
@@ -719,9 +711,9 @@ soma = abs(signal_logit.dropna(axis=0, how='all')).sum(axis=1)
 for d in ew_weights.index:
     for tracker in ew_weights.columns:
         if signals_ew[tracker].loc[d] == 0:
-            ew_weights.set_value(d, tracker, 0)
+            ew_weights.at[d, tracker] = 0
         else:
-            ew_weights.set_value(d, tracker, 1 / soma.loc[d])
+            ew_weights.at[d, tracker] = 1 / soma.loc[d]
 
 #    weights_ew = ew_weights
 returns_ew = returns_logit.dropna(axis=0, how='all').fillna(0)  # [1:]
@@ -1042,11 +1034,11 @@ for crypto_string in crypto_list:
             # Escolhido o melhor modelo, faça fit dos dados in-sample com a amostra de treino + validação
             # Gere out-of-sample forecasting um passo à frente para gerar o sinal prevista para o portfólio da semana seguinte
 
-            scores_final_svc.set_value(x_test.index, crypto_string, best_score)
+            scores_final_svc.at[x_test.index, crypto_string] = best_score
             model = SVC(C=best_parameters['C'], class_weight=None, gamma=best_parameters['gamma'],
                         kernel=best_parameters['Kernel'])
             model.fit(x_train_val, y_train_val)
-            signal_svc.set_value(x_test.index, crypto_string, model.predict(x_test)[0])
+            signal_svc.at[x_test.index, crypto_string] = model.predict(x_test)[0]
             pred.append(model.predict(x_test)[0])
             true_values.append(y_test['Signals'][0])
             param.append(best_parameters)
@@ -1061,9 +1053,9 @@ for crypto_string in crypto_list:
                         kernel=best_parameters['Kernel'])
             model.fit(x_train_val, y_train_val)
             pred.append(model.predict(x_test)[0])
-            signal_svc.set_value(x_test.index, crypto_string, model.predict(x_test)[0])
+            signal_svc.at[x_test.index, crypto_string] = model.predict(x_test)[0]
             model.fit(x_train, y_train)
-            scores_final_svc.set_value(x_test.index, crypto_string, model.score(x_val, y_val))
+            scores_final_svc.at[x_test.index, crypto_string] = model.score(x_val, y_val)
 
             true_values.append(y_test['Signals'][0])
             scores.append(score)
@@ -1075,13 +1067,9 @@ for crypto_string in crypto_list:
 
     for d in signal_svc.index:
         if signal_svc[crypto_string].loc[d] == 1:
-            returns_svc.set_value(d, crypto_string, (1 - CT) * (
-                        df[crypto_string]['Adj Close'].loc[d] / df[crypto_string]['Adj Close'].loc[:d].iloc[-2]) - 1 -
-                                  df_livre_risco['IRX Semanal'].loc[d])
+            returns_svc.at[d, crypto_string] = (1 - CT) * (df[crypto_string]['Adj Close'].loc[d] / df[crypto_string]['Adj Close'].loc[:d].iloc[-2]) - 1 - df_livre_risco['IRX Semanal'].loc[d]
         elif signal_svc[crypto_string].loc[d] == -1:
-            returns_svc.set_value(d, crypto_string, (1 - CT) * (
-                        df[crypto_string]['Adj Close'].loc[:d].iloc[-2] / df[crypto_string]['Adj Close'].loc[d]) - 1 -
-                                  df_livre_risco['IRX Semanal'].loc[d])
+            returns_svc.at[d, crypto_string] = (1 - CT) * (df[crypto_string]['Adj Close'].loc[:d].iloc[-2] / df[crypto_string]['Adj Close'].loc[d]) - 1 - df_livre_risco['IRX Semanal'].loc[d]
 
     strat_index = pd.DataFrame(index=X.index[train_val:], columns=['Returns', 'Level'])
 
@@ -1106,7 +1094,7 @@ for crypto_string in crypto_list:
     summary_final_svc['Mean Return'].loc[crypto_string] = strat_index['Returns'].mean() * 52
 
     for d in strat_index.index:
-        return_final_svc.set_value(d, crypto_string, strat_index['Level'].loc[d])
+        return_final_svc.at[d, crypto_string] = strat_index['Level'].loc[d]
 #        signal_final_svc.set_value(d,crypto_string, signal_svc[crypto_string].loc[d])
 
 
@@ -1132,9 +1120,9 @@ soma = abs(signal_svc.dropna(axis=0, how='all')).sum(axis=1)
 for d in ew_weights.index:
     for tracker in ew_weights.columns:
         if signals_ew[tracker].loc[d] == 0:
-            ew_weights.set_value(d, tracker, 0)
+            ew_weights.at[d, tracker] = 0
         else:
-            ew_weights.set_value(d, tracker, 1 / soma.loc[d])
+            ew_weights.at[d, tracker] = 1 / soma.loc[d]
 
     #    weights_ew = ew_weights
 returns_ew = returns_svc.dropna(axis=0, how='all').fillna(0)  # [1:]
@@ -1340,13 +1328,9 @@ for d in signal_combination.index:
 for d in signal_combination.index:
     for crypto in signal_combination.columns:
         if signal_combination[crypto].loc[d] == 1:
-            returns_combination.set_value(d, crypto, (1 - CT) * (
-                        df[crypto]['Adj Close'].loc[d] / df[crypto]['Adj Close'].loc[:d].iloc[-2]) - 1 -
-                                          df_livre_risco['IRX Semanal'].loc[d])
+            returns_combination.at[d, crypto] = (1 - CT) * (df[crypto]['Adj Close'].loc[d] / df[crypto]['Adj Close'].loc[:d].iloc[-2]) - 1 - df_livre_risco['IRX Semanal'].loc[d]
         elif signal_combination[crypto].loc[d] == -1:
-            returns_combination.set_value(d, crypto, (1 - CT) * (
-                        df[crypto]['Adj Close'].loc[:d].iloc[-2] / df[crypto]['Adj Close'].loc[d]) - 1 -
-                                          df_livre_risco['IRX Semanal'].loc[d])
+            returns_combination.at[d, crypto] = (1 - CT) * (df[crypto]['Adj Close'].loc[:d].iloc[-2] / df[crypto]['Adj Close'].loc[d]) - 1 - df_livre_risco['IRX Semanal'].loc[d]
 
 ######################
 
@@ -1361,9 +1345,9 @@ soma = abs(signal_combination.dropna(axis=0, how='all')).sum(axis=1)
 for d in ew_weights.index:
     for tracker in ew_weights.columns:
         if signals_ew[tracker].loc[d] == 0:
-            ew_weights.set_value(d, tracker, 0)
+            ew_weights.at[d, tracker] = 0
         else:
-            ew_weights.set_value(d, tracker, 1 / soma.loc[d])
+            ew_weights.at[d, tracker] = 1 / soma.loc[d]
 
 #    weights_ew = ew_weights
 returns_ew = returns_combination.dropna(axis=0, how='all').fillna(0)  # [1:]
